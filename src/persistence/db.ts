@@ -167,6 +167,73 @@ export class BotDb {
     return stmt.all(limit) as Array<Record<string, unknown>>
   }
 
+  /** Ricostruisce lo stato demo dai fill: equity finale, trade count, wins, losses. */
+  getDemoStateFromFills(startingBalance: number): {
+    demoEquity: number
+    demoTrades: number
+    demoWins: number
+    demoLosses: number
+  } {
+    const stmt = this.db.prepare(`
+      SELECT COALESCE(SUM(pnl), 0) AS total_pnl,
+             COUNT(*) AS n_close,
+             SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS wins,
+             SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END) AS losses
+      FROM fills WHERE is_close = 1
+    `)
+    const r = stmt.get() as { total_pnl: number; n_close: number; wins: number; losses: number }
+    return {
+      demoEquity: startingBalance + (r.total_pnl ?? 0),
+      demoTrades: r.n_close ?? 0,
+      demoWins: r.wins ?? 0,
+      demoLosses: r.losses ?? 0,
+    }
+  }
+
+  /** Stats aggregate per strategia (join fills × orders). */
+  getStatsByStrategy(): Array<{
+    strategy_id: string
+    trades: number
+    wins: number
+    losses: number
+    total_pnl: number
+    gross_win: number
+    gross_loss: number
+  }> {
+    const stmt = this.db.prepare(`
+      SELECT o.strategy_id,
+             COUNT(f.id) AS trades,
+             SUM(CASE WHEN f.pnl > 0 THEN 1 ELSE 0 END) AS wins,
+             SUM(CASE WHEN f.pnl < 0 THEN 1 ELSE 0 END) AS losses,
+             COALESCE(SUM(f.pnl), 0) AS total_pnl,
+             COALESCE(SUM(CASE WHEN f.pnl > 0 THEN f.pnl ELSE 0 END), 0) AS gross_win,
+             COALESCE(SUM(CASE WHEN f.pnl < 0 THEN ABS(f.pnl) ELSE 0 END), 0) AS gross_loss
+      FROM fills f
+      JOIN orders o ON o.id = f.order_id
+      WHERE f.is_close = 1
+      GROUP BY o.strategy_id
+      ORDER BY total_pnl DESC
+    `)
+    return stmt.all() as never
+  }
+
+  /** Max drawdown osservato sulla equity curve. */
+  getMaxDrawdown(): { peak: number; trough: number; ddPct: number; ddUsd: number } {
+    const curve = this.getEquityCurve(10000)
+    let peak = 0, trough = 0, maxDD = 0
+    let currentPeak = -Infinity
+    for (const p of curve) {
+      if (p.equity_usd > currentPeak) currentPeak = p.equity_usd
+      const dd = currentPeak - p.equity_usd
+      if (dd > maxDD) {
+        maxDD = dd
+        peak = currentPeak
+        trough = p.equity_usd
+      }
+    }
+    return { peak, trough, ddPct: peak > 0 ? (maxDD / peak) * 100 : 0, ddUsd: maxDD }
+  }
+
   close(): void {
     this.db.close()
   }

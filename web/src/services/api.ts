@@ -220,6 +220,25 @@ export const api = {
   volume:     (coin: string, tf = '15m') => jsonFetch<{ coin: string; tf: string; profile: { poc: number; vah: number; val: number; totalVolume: number; hvn: number[]; lvn: number[]; buckets: { price: number; volume: number }[] } | null }>(`/volume/${coin}?tf=${tf}`),
   funding:    () => jsonFetch<{ cached: boolean; data: Array<{ coin: string; funding: number; openInterest: number; markPrice: number; premium: number }> }>('/funding'),
   demo:       () => jsonFetch<{ startingBalance: number; currentEquity: number; pnl: number; pnlPct: number; trades: number; wins: number; losses: number; winRate: number; equityCurve: Array<{ ts: number; equity_usd: number; daily_pnl_usd: number | null }>; recentFills: Array<Record<string, unknown>> }>('/demo'),
+  health:     () => jsonFetch<{
+    score: number
+    color: 'green' | 'yellow' | 'red'
+    label: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'COLLECTING_DATA'
+    uptime: number
+    demoEquity: number
+    startingBalance: number
+    pnl: number
+    pnlPct: number
+    trades: number
+    wins: number
+    losses: number
+    winRate: number
+    profitFactor: number
+    maxDrawdown: { peak: number; trough: number; ddPct: number; ddUsd: number }
+    router: { signalsGenerated: number; ordersAttempted: number; ordersAccepted: number; acceptRate: number }
+    perStrategy: Array<{ strategy_id: string; trades: number; wins: number; losses: number; total_pnl: number; gross_win: number; gross_loss: number; win_rate: number; profit_factor: number }>
+    checks: Array<{ name: string; ok: boolean; value: string; target: string }>
+  }>('/health'),
   halt:       () => jsonFetch<{ halted: boolean }>('/halt',   { method: 'POST', headers: { 'X-Confirm': 'yes' } }),
   resume:     () => jsonFetch<{ halted: boolean }>('/resume', { method: 'POST', headers: { 'X-Confirm': 'yes' } }),
 }

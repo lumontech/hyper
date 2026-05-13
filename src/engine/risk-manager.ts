@@ -59,6 +59,15 @@ export class RiskManager {
     this.deps.logger.info({ equity: account.equityUsd, demoEquity: this.state.demoEquity }, '[RISK] initialized')
   }
 
+  /** Restore stato demo da DB persistente (chiamato all'avvio per continuare il paper trading). */
+  restoreDemoState(state: { demoEquity: number; demoTrades: number; demoWins: number; demoLosses: number }): void {
+    this.state.demoEquity = state.demoEquity
+    this.state.demoTrades = state.demoTrades
+    this.state.demoWins = state.demoWins
+    this.state.demoLosses = state.demoLosses
+    this.deps.logger.info(state, '[RISK] demo state restored from DB')
+  }
+
   /** Da chiamare ogni UTC midnight */
   rolloverDay(currentEquity: number): void {
     this.state.equityStartOfDay = currentEquity

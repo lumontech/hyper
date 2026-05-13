@@ -281,6 +281,78 @@ export async function startHttpServer(deps: HttpServerDeps): Promise<FastifyInst
     }
   })
 
+  // ── GET /health ─────────────────────────────────────────────────
+  // Score globale + per-strategy + signal rate. Risposta in un colpo per pannello health.
+  app.get('/health', async () => {
+    const r = deps.risk.snapshot() as { startingBalance?: number; demoEquity?: number; demoTrades?: number; demoWins?: number; demoLosses?: number }
+    const startBal = r.startingBalance ?? 1000
+    const demoEq = r.demoEquity ?? startBal
+    const trades = r.demoTrades ?? 0
+    const wins = r.demoWins ?? 0
+    const losses = r.demoLosses ?? 0
+    const closed = wins + losses
+    const winRate = closed > 0 ? (wins / closed) * 100 : 0
+    const pnl = demoEq - startBal
+    const pnlPct = startBal > 0 ? (pnl / startBal) * 100 : 0
+
+    // Per-strategy + max DD da DB
+    const perStrategy = deps.db?.getStatsByStrategy() ?? []
+    const dd = deps.db?.getMaxDrawdown() ?? { peak: startBal, trough: startBal, ddPct: 0, ddUsd: 0 }
+
+    // Profit factor globale
+    let totalGW = 0, totalGL = 0
+    for (const s of perStrategy) { totalGW += s.gross_win; totalGL += s.gross_loss }
+    const profitFactor = totalGL > 0 ? totalGW / totalGL : totalGW > 0 ? 99 : 0
+
+    // Signal rate (24h dal router se disponibile)
+    const router = deps.router?.snapshot()
+    const signalsGenerated = router?.signalsGenerated ?? 0
+    const ordersAttempted = router?.ordersAttempted ?? 0
+    const ordersAccepted = router?.ordersAccepted ?? 0
+    const acceptRate = ordersAttempted > 0 ? (ordersAccepted / ordersAttempted) * 100 : 0
+
+    // Health score 0..100 — semaforo
+    //   PF >= 1.4 e DD < 20 e WR >= 50 → verde (>=70)
+    //   PF >= 1.0 e DD < 30 → giallo (40-70)
+    //   altrimenti rosso (<40)
+    let healthScore = 50
+    const checks: Array<{ name: string; ok: boolean; value: string; target: string }> = [
+      { name: 'Profit Factor', ok: profitFactor >= 1.4, value: profitFactor.toFixed(2), target: '≥ 1.4' },
+      { name: 'Win Rate', ok: winRate >= 50, value: winRate.toFixed(0) + '%', target: '≥ 50%' },
+      { name: 'Max Drawdown', ok: dd.ddPct < 20, value: dd.ddPct.toFixed(1) + '%', target: '< 20%' },
+      { name: 'Trade Count', ok: trades >= 30, value: String(trades), target: '≥ 30 (M2), ≥ 150 (M3)' },
+      { name: 'Equity vs start', ok: pnl >= 0, value: (pnl >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%', target: '> 0%' },
+    ]
+    const passed = checks.filter(c => c.ok).length
+    healthScore = (passed / checks.length) * 100
+    const healthColor = healthScore >= 70 ? 'green' : healthScore >= 40 ? 'yellow' : 'red'
+    const healthLabel = trades < 5
+      ? 'COLLECTING_DATA'
+      : healthScore >= 70 ? 'HEALTHY'
+      : healthScore >= 40 ? 'WARNING'
+      : 'CRITICAL'
+
+    return {
+      score: Math.round(healthScore),
+      color: healthColor,
+      label: healthLabel,
+      uptime: Math.floor((Date.now() - deps.startedAt) / 1000),
+      demoEquity: demoEq,
+      startingBalance: startBal,
+      pnl, pnlPct,
+      trades, wins, losses, winRate,
+      profitFactor,
+      maxDrawdown: dd,
+      router: { signalsGenerated, ordersAttempted, ordersAccepted, acceptRate },
+      perStrategy: perStrategy.map(s => ({
+        ...s,
+        win_rate: (s.wins + s.losses) > 0 ? (s.wins / (s.wins + s.losses)) * 100 : 0,
+        profit_factor: s.gross_loss > 0 ? s.gross_win / s.gross_loss : (s.gross_win > 0 ? 99 : 0),
+      })),
+      checks,
+    }
+  })
+
   // ── GET /demo ───────────────────────────────────────────────────
   // Stato demo trading dettagliato: equity, trades, stats, equity curve
   app.get('/demo', async () => {

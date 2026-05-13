@@ -9,6 +9,7 @@ interface Item {
 
 const ITEMS: Item[] = [
   { id: 'dashboard',  label: 'Dashboard',   icon: '◎', desc: 'Live prices + chart' },
+  { id: 'health',     label: 'Bot Health',  icon: '❤', desc: 'Score globale + criteri GO LIVE' },
   { id: 'autotrader', label: 'Auto-Trader', icon: '⚡', desc: 'Signals + orders live' },
   { id: 'demo',       label: 'Demo €1000',  icon: '💰', desc: 'Account simulato + equity' },
   { id: 'backtest',   label: 'Backtest',    icon: '⊞', desc: '30/60/90 days sim' },

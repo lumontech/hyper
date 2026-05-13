@@ -63,6 +63,15 @@ async function main() {
   const risk = new RiskManager({ config, logger })
   risk.initializeFromAccount(account.current() ?? account.placeholder(initialEquity))
 
+  // 5b. Restore stato demo da DB se ci sono fill precedenti (continua paper trading tra restart)
+  if (config.dryRun) {
+    const restored = db.getDemoStateFromFills(initialEquity)
+    if (restored.demoTrades > 0) {
+      risk.restoreDemoState(restored)
+      logger.info(restored, '[BOOT] demo state restored — continuing paper trading')
+    }
+  }
+
   // 6. Position manager + live executor
   // Definiamo le ref forward per il closure di onForceClose
   let executor: LiveExecutor
