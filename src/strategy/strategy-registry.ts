@@ -12,11 +12,13 @@ import { failedBreakout } from './strategies/failed-breakout.js'
 import { pivotReversal } from './strategies/pivot-reversal.js'
 import { ictSilverBullet } from './strategies/ict-silver-bullet.js'
 import { orderBlockFvg } from './strategies/order-block-fvg.js'
+import { donchianBreakout } from './strategies/donchian-breakout.js'
+import { zigzagRsi } from './strategies/zigzag-rsi.js'
 
 export const ALL_STRATEGIES: StrategyDef[] = [
   // ── Adaptive (scritta da Claude) ──
   adaptive,
-  // ── Library (port da trade.fondamentale) ──
+  // ── Library (port da trade.fondamentale + community forum) ──
   mssChoCH,
   liquiditySweep,
   tripleBarTrap,
@@ -24,6 +26,8 @@ export const ALL_STRATEGIES: StrategyDef[] = [
   pivotReversal,
   ictSilverBullet,
   orderBlockFvg,
+  donchianBreakout,    // turtle classic
+  zigzagRsi,           // TradingView top-voted ETHUSDT
 ]
 
 export function getEnabledStrategies(ids: string[]): StrategyDef[] {

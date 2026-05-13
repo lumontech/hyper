@@ -5,6 +5,20 @@
 A partire dal 2026-05-13, **tutto il lavoro si fa solo sulla VPS** Contabo `81.17.100.112`.
 **Non eseguire mai `npm run dev` o `docker compose up` in locale.** Locale serve solo come repo editing + git push.
 
+## ⏱️ ROADMAP TEST → LIVE (3 mesi paper trading)
+
+Aggiornato 2026-05-13 dopo ricerca su forum/community (Reddit r/Daytrading raccomanda 6 mesi minimo, noi puntiamo a **3 mesi conservativi**).
+
+| Periodo | Cosa monitorare | Criteri "go" |
+|---------|-----------------|--------------|
+| **M1 (week 1-4)** | Frequenza signal totale, distribuzione adaptive vs library, primi 30-50 trade demo, max DD osservato | nessuno — fase di osservazione, dataset raw |
+| **M2 (week 5-8)** | Win rate per strategia, profit factor (PF), drawdown distribution, pattern-conflict skip rate, no-trade window event respect | PF rolling 14gg ≥ 1.2, max DD < 25% |
+| **M3 (week 9-12)** | Stabilità metriche, Sharpe ratio mentale, equity curve smooth, ≥150 trade campionati | **Criteri "GO LIVE":** PF ≥ 1.4, max DD < 20%, WR ≥ 50%, ≥150 trade, Sharpe annualizzato ≥ 1.0 |
+
+Se i criteri non passano al mese 3 → si riparte con tweak (disabilita strategie weak, abbassa risk, aggiungi filtri).
+
+**LIVE GO**: cambiare `EXEC_DRY_RUN=false`, configurare HL API Wallet (non master!), iniziare con `RISK_MAX_POSITION_USD=100`. Scalare gradualmente.
+
 **Workflow di deploy** (single comando):
 ```bash
 git push origin main
