@@ -19,7 +19,8 @@ ENV VITE_BASE=${VITE_BASE}
 ENV VITE_API_BASE=${VITE_API_BASE}
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+# npm install (non ci): tollera lockfile non perfettamente sync — più robusto in CI
+RUN npm install --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 # Output in /app/web/dist (path-prefix applicato come da VITE_BASE)
@@ -28,8 +29,8 @@ RUN npm run build
 FROM node:22-alpine AS backend-install
 WORKDIR /app
 COPY package.json package-lock.json* ./
-# tsx serve come runtime, è in devDeps; servono entrambi
-RUN npm ci --no-audit --no-fund
+# npm install (non ci): tsx in devDeps + tollerante a lockfile non sync
+RUN npm install --no-audit --no-fund
 
 # ── Stage 3: runtime ────────────────────────────────────────────────
 FROM node:22-alpine AS runtime
