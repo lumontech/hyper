@@ -1,5 +1,20 @@
 # Hyperliquid Platform — Claude Code Instructions
 
+## ⚠️ REGOLA OPERATIVA — WORK ONLY ON VPS
+
+A partire dal 2026-05-13, **tutto il lavoro si fa solo sulla VPS** Contabo `81.17.100.112`.
+**Non eseguire mai `npm run dev` o `docker compose up` in locale.** Locale serve solo come repo editing + git push.
+
+**Workflow di deploy** (single comando):
+```bash
+git push origin main
+ssh -i ~/.ssh/hyperliquid-vps root@81.17.100.112 "cd /opt/hyperliquid-bot && git pull && docker compose up -d --build"
+```
+
+Accesso piattaforma: **https://hyperliquid-81-17-100-112.nip.io** (Caddy + HTTPS + basic auth, credenziali in `/root/hyperliquid-credentials.txt` sulla VPS).
+
+`trade.fondamentale` (`impact-81-17-100-112.nip.io`) rimane intoccato.
+
 ## Struttura del repo
 
 ```

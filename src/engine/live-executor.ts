@@ -76,8 +76,8 @@ export class LiveExecutor {
     const cfg = this.deps.config
     const account = this.deps.account.current() ?? this.deps.account.placeholder(1000)
 
-    // 1. Position sizing
-    const equity = account.equityUsd
+    // 1. Position sizing — in dry-run usa equity demo (compounding), altrimenti account reale
+    const equity = cfg.dryRun ? this.deps.risk.effectiveEquity() : account.equityUsd
     const riskUsd = equity * (cfg.riskPerTradePct / 100)
     const slDistAbs = atrValue * cfg.slAtrMult
     if (slDistAbs <= 0) return { ok: false, reason: 'ATR zero' }
@@ -195,9 +195,35 @@ export class LiveExecutor {
     const orderId = `close-${coin}-${Date.now()}`
 
     if (cfg.dryRun || !cfg.apiPrivateKey) {
-      this.deps.db.insertOrder(closeOrder, orderId, true, { dryRun: true, hash, reason })
+      // === DEMO TRADING (dry-run) ===
+      // Simula fill al last mid price + calcola P&L netto fee (HL taker 0.045% × 2 round-trip)
+      const exitPrice = this.deps.positions.getLastMid(coin) ?? p.entryPrice
+      const grossPnl = p.direction === 'long'
+        ? (exitPrice - p.entryPrice) * p.size
+        : (p.entryPrice - exitPrice) * p.size
+      const feeRate = 0.00045   // HL taker
+      const fees = (p.entryPrice + exitPrice) * p.size * feeRate
+      const netPnl = grossPnl - fees
+
+      this.deps.db.insertOrder(closeOrder, orderId, true, { dryRun: true, hash, reason, exitPrice, netPnl })
+      this.deps.db.insertFill({
+        orderId,
+        ts: Date.now(),
+        coin,
+        direction: closeOrder.direction,
+        size: p.size,
+        price: exitPrice,
+        fee: fees,
+        pnl: netPnl,
+        isClose: true,
+      })
+
+      // Aggiorna equity demo + stats
+      this.deps.risk.recordDemoFill(netPnl)
+      this.deps.audit.append('demo_close', { coin, entry: p.entryPrice, exit: exitPrice, size: p.size, netPnl, reason })
+
       this.deps.positions.untrack(coin)
-      this.deps.logger.warn({ coin, reason }, '[EXEC][DRY] force close recorded')
+      this.deps.logger.warn({ coin, reason, entry: p.entryPrice, exit: exitPrice, netPnl: netPnl.toFixed(2) }, '[EXEC][DRY] DEMO close')
       return
     }
 

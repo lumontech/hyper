@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore, COINS } from '../store/store'
-import { api, type Candle } from '../services/api'
+import { api, type Candle, type Pattern } from '../services/api'
 import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts'
 
 export function Dashboard() {
@@ -47,6 +47,68 @@ export function Dashboard() {
       </div>
 
       <ChartPanel coin={selectedCoin} />
+
+      <PatternsPanel coin={selectedCoin} />
+    </div>
+  )
+}
+
+function PatternsPanel({ coin }: { coin: string }) {
+  const [data, setData] = useState<{ patterns: Pattern[]; dominantBias: string; bullishCount: number; bearishCount: number } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    api.patterns(coin, '15m')
+      .then(r => { if (!cancelled) setData(r) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    const id = setInterval(() => {
+      api.patterns(coin, '15m').then(r => { if (!cancelled) setData(r) }).catch(() => {})
+    }, 60000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [coin])
+
+  if (!data || loading) return (
+    <div className="rounded-lg border border-line bg-panel p-3 text-xs text-muted">
+      {loading ? 'analizzando pattern...' : 'nessun dato pattern'}
+    </div>
+  )
+
+  const biasColor = data.dominantBias === 'bullish' ? 'text-long' : data.dominantBias === 'bearish' ? 'text-short' : 'text-muted'
+  const last5 = data.patterns.slice(-5).reverse()
+
+  return (
+    <div className="rounded-lg border border-line bg-panel p-3">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-mono text-sm">{coin}USDC · Pattern Recognition (15m)</h2>
+        <div className="flex items-center gap-3 text-xs font-mono">
+          <span className="text-muted">Bias dominante:</span>
+          <span className={biasColor.toUpperCase() + ' font-bold ' + biasColor}>{data.dominantBias.toUpperCase()}</span>
+          <span className="text-long">▲ {data.bullishCount}</span>
+          <span className="text-short">▼ {data.bearishCount}</span>
+        </div>
+      </div>
+      {data.patterns.length === 0 ? (
+        <div className="text-muted text-xs italic text-center py-3">Nessun pattern rilevato nelle ultime 20 candele.</div>
+      ) : (
+        <div className="grid grid-cols-5 gap-2">
+          {last5.map((p, i) => {
+            const biasCls = p.bias === 'bullish' ? 'border-long/40 text-long' : p.bias === 'bearish' ? 'border-short/40 text-short' : 'border-line text-muted'
+            const relCls = p.reliability === 'high' ? 'bg-gold/15 border-gold/40 text-gold' : p.reliability === 'medium' ? 'bg-line border-line' : 'bg-bg border-line opacity-60'
+            return (
+              <div key={i} className={`p-2 rounded border ${biasCls} text-[10px]`}>
+                <div className="font-mono text-xs">{p.italian}</div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[9px] uppercase tracking-wider opacity-75">{p.type}</span>
+                  <span className={`px-1 rounded text-[9px] ${relCls}`}>{p.reliability}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

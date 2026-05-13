@@ -13,8 +13,10 @@ import type { Config } from '../utils/config.js'
 import type { Candle, Signal, StrategyDef } from '../types/trading.js'
 import type { LiveExecutor } from '../engine/live-executor.js'
 import type { PositionManager } from '../engine/position-manager.js'
+import type { EventsCalendar } from '../strategy/events-calendar.js'
 import { atr } from '../strategy/indicators.js'
 import { isStrategyCompatibleWithCoin } from '../strategy/strategy-registry.js'
+import { evaluateSignalConfluence } from '../strategy/patterns.js'
 
 const HIGH_CONVICTION_STYLES = new Set(['smc', 'reversal'])
 
@@ -24,6 +26,7 @@ export interface SignalRouterDeps {
   executor: LiveExecutor
   positions: PositionManager
   strategies: StrategyDef[]
+  events?: EventsCalendar
 }
 
 export interface RouterStats {
@@ -140,11 +143,33 @@ export class SignalRouter {
       return
     }
 
+    // No-trade window: skip se siamo entro ±30min da evento high impact su coin
+    if (this.deps.events) {
+      const guard = this.deps.events.isInNoTradeWindow(coin, 30)
+      if (guard.blocked && guard.event) {
+        this.recordSignal(coin, chosen.strategy.id, chosen.signal.direction, chosen.signal.reason, `skipped:event-${guard.event.id}`)
+        this.deps.logger.warn({ coin, event: guard.event.title }, '[ROUTER] no-trade window event')
+        return
+      }
+    }
+
+    // Pattern confluence: veto se pattern dominante è opposto al signal
+    const confluenceCheck = evaluateSignalConfluence(buf, chosen.signal.direction)
+    if (confluenceCheck.verdict === 'conflict') {
+      this.recordSignal(coin, chosen.strategy.id, chosen.signal.direction,
+        `${chosen.signal.reason} | pattern conflict (${confluenceCheck.summary.dominantBias})`,
+        'skipped:pattern-conflict')
+      this.deps.logger.warn({ coin, dominantBias: confluenceCheck.summary.dominantBias }, '[ROUTER] pattern conflict, skipping')
+      return
+    }
+    const patternBoost = confluenceCheck.verdict === 'align' ? ' [pattern-align]' : ''
+
     this.stats.ordersAttempted++
     const result = await this.deps.executor.execute(chosen.signal, coin, atrVal, markPrice)
     if (result.ok) {
       this.stats.ordersAccepted++
-      this.recordSignal(coin, chosen.strategy.id, chosen.signal.direction, `${chosen.signal.reason}${confluence > 1 ? ` [confluence ${confluence}]` : ''}`, `accepted:${result.orderId}`)
+      const reasonLabel = `${chosen.signal.reason}${confluence > 1 ? ` [confluence ${confluence}]` : ''}${patternBoost}`
+      this.recordSignal(coin, chosen.strategy.id, chosen.signal.direction, reasonLabel, `accepted:${result.orderId}`)
     } else {
       this.stats.ordersRejected++
       this.recordSignal(coin, chosen.strategy.id, chosen.signal.direction, chosen.signal.reason, `rejected:${result.reason}`)

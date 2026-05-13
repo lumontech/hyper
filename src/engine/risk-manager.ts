@@ -30,6 +30,11 @@ export interface RiskState {
   lastOrderAtMs: number
   ruinTriggered: boolean
   startingBalance: number   // first observed equity, snapshot at boot
+  /** Equity simulato per modalità DRY_RUN (parte da startingBalance, aggiornato dai fill sintetici). */
+  demoEquity: number
+  demoTrades: number
+  demoWins: number
+  demoLosses: number
 }
 
 export class RiskManager {
@@ -39,6 +44,10 @@ export class RiskManager {
     lastOrderAtMs: 0,
     ruinTriggered: false,
     startingBalance: 0,
+    demoEquity: 0,
+    demoTrades: 0,
+    demoWins: 0,
+    demoLosses: 0,
   }
 
   constructor(private readonly deps: RiskManagerDeps) {}
@@ -46,7 +55,8 @@ export class RiskManager {
   initializeFromAccount(account: AccountState): void {
     this.state.equityStartOfDay = account.equityUsd
     this.state.startingBalance = account.equityUsd
-    this.deps.logger.info({ equity: account.equityUsd }, '[RISK] initialized')
+    this.state.demoEquity = account.equityUsd
+    this.deps.logger.info({ equity: account.equityUsd, demoEquity: this.state.demoEquity }, '[RISK] initialized')
   }
 
   /** Da chiamare ogni UTC midnight */
@@ -58,6 +68,20 @@ export class RiskManager {
 
   recordFillPnl(pnlUsd: number): void {
     this.state.dailyPnlUsd += pnlUsd
+  }
+
+  /** Demo fill (dry-run): aggiorna equity simulato + stats. */
+  recordDemoFill(pnlUsd: number): void {
+    this.state.demoEquity += pnlUsd
+    this.state.dailyPnlUsd += pnlUsd
+    this.state.demoTrades += 1
+    if (pnlUsd > 0) this.state.demoWins += 1
+    else if (pnlUsd < 0) this.state.demoLosses += 1
+  }
+
+  /** Equity corrente da usare per sizing: demo in dry-run, reale altrimenti. */
+  effectiveEquity(): number {
+    return this.deps.config.dryRun ? this.state.demoEquity : this.state.startingBalance
   }
 
   /** Effective limits: min(env_value, hard_limit) */

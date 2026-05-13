@@ -13,8 +13,10 @@ import type { PositionManager } from '../engine/position-manager.js'
 import type { BotDb } from '../persistence/db.js'
 import type { Heartbeat } from '../guardian/heartbeat.js'
 import type { SignalRouter } from '../orchestrator/signal-router.js'
+import type { EventsCalendar } from '../strategy/events-calendar.js'
 import { ALL_STRATEGIES } from '../strategy/strategy-registry.js'
 import { simulateAccount } from '../engine/simulator.js'
+import { detectAllPatterns } from '../strategy/patterns.js'
 
 export interface HttpServerDeps {
   config: Config
@@ -27,6 +29,7 @@ export interface HttpServerDeps {
   positions?: PositionManager
   db?: BotDb
   heartbeat?: Heartbeat
+  events?: EventsCalendar
 }
 
 const HALT_FILE = resolve('.HALT')
@@ -85,6 +88,7 @@ export async function startHttpServer(deps: HttpServerDeps): Promise<FastifyInst
     risk: deps.risk.snapshot(),
     heartbeat: deps.heartbeat?.snapshot(),
     router: deps.router?.snapshot(),
+    events: deps.events?.snapshot(),
     autonomous: Boolean(deps.router && deps.positions),
   }))
 
@@ -213,6 +217,32 @@ export async function startHttpServer(deps: HttpServerDeps): Promise<FastifyInst
   app.get('/router', async () => {
     if (!deps.router) return { note: 'router not active' }
     return deps.router.snapshot()
+  })
+
+  // ── GET /patterns/:coin ─────────────────────────────────────────
+  app.get<{ Params: { coin: string }; Querystring: { tf?: string } }>(
+    '/patterns/:coin', async (req, reply) => {
+      const coin = req.params.coin.toUpperCase()
+      if (!deps.config.allowedCoins.includes(coin)) return reply.code(400).send({ error: `Coin ${coin} not allowed` })
+      const tf = req.query.tf ?? deps.config.strategyTimeframe
+      try {
+        const candles = await deps.client.fetchCandles(coin, tf, 200)
+        const summary = detectAllPatterns(candles)
+        return { coin, tf, ...summary }
+      } catch (err) {
+        return reply.code(500).send({ error: String(err) })
+      }
+    },
+  )
+
+  // ── GET /events ─────────────────────────────────────────────────
+  app.get('/events', async () => {
+    if (!deps.events) return { upcoming: [], recent: [], note: 'events calendar not active' }
+    return {
+      upcoming: deps.events.upcoming(14),
+      recent: deps.events.recent(24),
+      snapshot: deps.events.snapshot(),
+    }
   })
 
   await app.listen({ port: deps.config.apiPort, host: deps.config.apiBind })

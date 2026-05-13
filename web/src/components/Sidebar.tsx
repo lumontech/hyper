@@ -13,6 +13,7 @@ const ITEMS: Item[] = [
   { id: 'backtest',   label: 'Backtest',    icon: '⊞', desc: '30/60/90 days sim' },
   { id: 'strategies', label: 'Strategies',  icon: '⚙', desc: 'WR, SL/TP, params' },
   { id: 'positions',  label: 'Positions',   icon: '◇', desc: 'Open + equity curve' },
+  { id: 'events',     label: 'Eventi',      icon: '📅', desc: 'Calendario macro + crypto' },
 ]
 
 export function Sidebar() {

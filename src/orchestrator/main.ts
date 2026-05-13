@@ -16,6 +16,7 @@ import { BotDb } from '../persistence/db.js'
 import { AuditLog } from '../persistence/audit-log.js'
 import { SignalRouter } from './signal-router.js'
 import { getEnabledStrategies } from '../strategy/strategy-registry.js'
+import { EventsCalendar } from '../strategy/events-calendar.js'
 import { startHttpServer } from '../api/http-server.js'
 
 async function main() {
@@ -72,8 +73,12 @@ async function main() {
   })
   executor = new LiveExecutor({ config, logger, client, account, risk, positions, db, audit })
 
-  // 7. Signal router
-  const router = new SignalRouter({ config, logger, executor, positions, strategies })
+  // 6b. Events calendar (macro + crypto-specific)
+  const events = new EventsCalendar({ logger, fetchExternal: true, fetchIntervalMin: 360 })
+  events.start()
+
+  // 7. Signal router (con pattern booster + event guard)
+  const router = new SignalRouter({ config, logger, executor, positions, strategies, events })
 
   // 8. Heartbeat per coin
   const heartbeat = new Heartbeat({
@@ -169,7 +174,7 @@ async function main() {
   // 14. HTTP API
   await startHttpServer({
     config, logger, client, risk, startedAt,
-    router, positions, db, heartbeat,
+    router, positions, db, heartbeat, events,
   })
 
   logger.info({ webUI: `http://${config.apiBind}:${config.apiPort}` }, '[BOOT] startup complete — autonomous trading loop active')

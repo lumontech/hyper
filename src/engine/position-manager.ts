@@ -27,10 +27,17 @@ export class PositionManager {
   private positions = new Map<string, TrackedPosition>()  // key: coin
   /** Per ogni coin, timestamp del primo "tocco" di SL/TP non ancora soddisfatto. */
   private touchedAt = new Map<string, { ts: number; reason: string }>()
+  /** Last mid price observed per coin, usato come exit price per simulated close in dry-run. */
+  private lastMid = new Map<string, number>()
   private readonly graceMs: number
 
   constructor(private readonly deps: PositionManagerDeps) {
     this.graceMs = deps.graceMs ?? 5000
+  }
+
+  /** Ultimo mid noto per coin (dal WS feed allMids). */
+  getLastMid(coin: string): number | undefined {
+    return this.lastMid.get(coin)
   }
 
   track(p: TrackedPosition): void {
@@ -58,6 +65,7 @@ export class PositionManager {
    * Se mark tocca SL/TP, avvia il grace timer. Allo scadere forza la chiusura.
    */
   onMid(coin: string, mid: number): void {
+    this.lastMid.set(coin, mid)
     const p = this.positions.get(coin)
     if (!p) return
 

@@ -6,6 +6,7 @@ import { AutoTrader } from './panels/AutoTrader'
 import { Backtest } from './panels/Backtest'
 import { Strategies } from './panels/Strategies'
 import { Positions } from './panels/Positions'
+import { Events } from './panels/Events'
 import { useStore } from './store/store'
 import { api } from './services/api'
 import { subscribeAllMids } from './services/hl-feed'
@@ -60,6 +61,7 @@ export default function App() {
           {activePanel === 'backtest'   && <Backtest />}
           {activePanel === 'strategies' && <Strategies />}
           {activePanel === 'positions'  && <Positions />}
+          {activePanel === 'events'     && <Events />}
         </main>
       </div>
     </div>

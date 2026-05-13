@@ -26,10 +26,52 @@ export interface StatusResponse {
   timeframe: string
   uptimeSec: number
   haltActive: boolean
-  risk: Record<string, unknown>
+  risk: {
+    demoEquity?: number
+    demoTrades?: number
+    demoWins?: number
+    demoLosses?: number
+    startingBalance?: number
+    dailyPnlUsd?: number
+    [k: string]: unknown
+  }
   heartbeat?: Record<string, { lastSeenMsAgo: number; stale: boolean }>
   router?: RouterSnapshot
+  events?: { total: number; upcomingCount: number; lastFetchAgo: number | null }
   autonomous?: boolean
+}
+
+export interface CryptoEvent {
+  id: string
+  ts: number
+  title: string
+  description: string
+  impact: 'high' | 'medium' | 'low'
+  category: 'macro' | 'crypto' | 'regulatory' | 'protocol'
+  affects: string[]
+  source: 'seed' | 'coingecko'
+}
+
+export interface Pattern {
+  type: 'candlestick' | 'chart'
+  id: string
+  name: string
+  italian: string
+  candleIndex: number
+  time: number
+  bias: 'bullish' | 'bearish' | 'neutral'
+  reliability: 'high' | 'medium' | 'low'
+  description: string
+}
+
+export interface PatternsResponse {
+  coin: string
+  tf: string
+  patterns: Pattern[]
+  dominantBias: 'bullish' | 'bearish' | 'neutral'
+  bullishCount: number
+  bearishCount: number
+  highReliability: Pattern[]
 }
 
 export interface StrategyMeta {
@@ -167,6 +209,8 @@ export const api = {
   orders:     () => jsonFetch<{ orders: OrderRow[]; note?: string }>('/orders'),
   fills:      () => jsonFetch<{ fills: FillRow[]; note?: string }>('/fills'),
   router:     () => jsonFetch<RouterSnapshot>('/router'),
+  patterns:   (coin: string, tf = '15m') => jsonFetch<PatternsResponse>(`/patterns/${coin}?tf=${tf}`),
+  events:     () => jsonFetch<{ upcoming: CryptoEvent[]; recent: CryptoEvent[]; snapshot: { total: number } }>('/events'),
   halt:       () => jsonFetch<{ halted: boolean }>('/halt',   { method: 'POST', headers: { 'X-Confirm': 'yes' } }),
   resume:     () => jsonFetch<{ halted: boolean }>('/resume', { method: 'POST', headers: { 'X-Confirm': 'yes' } }),
 }
