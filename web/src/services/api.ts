@@ -1,9 +1,13 @@
 // Client HTTP per il backend Node.
 // In dev: BASE = 'http://127.0.0.1:7777' (chiamate CORS al backend separato).
-// In prod su stesso origine (Docker + nginx path-prefix): BASE = '' (chiamate relative).
+// In prod: usa window.location.origin (URL assoluto) per bypassare baseURI bug Chrome
+// quando la pagina è caricata con credentials inline (user:pwd@host).
 
 declare const __API_BASE__: string
-const BASE = __API_BASE__
+// In prod (build) __API_BASE__ è stringa vuota → usa origin runtime con URL assoluto.
+const BASE = __API_BASE__ && __API_BASE__.startsWith('http')
+  ? __API_BASE__
+  : (typeof window !== 'undefined' ? window.location.origin : '') + (__API_BASE__ || '')
 
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
