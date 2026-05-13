@@ -41,6 +41,7 @@ export const pivotReversal: StrategyDef = {
   name: 'Pivot Daily Reversal',
   icon: '◇',
   style: 'mean-reversion',
+  category: 'library',
   expectedWR: '62-68%',
   slMul: 0.7,
   tpMul: 1.3,

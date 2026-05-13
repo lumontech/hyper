@@ -30,6 +30,7 @@ export const liquiditySweep: StrategyDef = {
   name: 'Liquidity Sweep',
   icon: '⚡',
   style: 'smc',
+  category: 'library',
   expectedWR: '62-70%',
   slMul: 0.8,
   tpMul: 1.5,

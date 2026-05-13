@@ -33,6 +33,7 @@ export const failedBreakout: StrategyDef = {
   name: 'Failed Breakout',
   icon: '🚫',
   style: 'reversal',
+  category: 'library',
   expectedWR: '60-68%',
   slMul: 0.8,
   tpMul: 1.6,

@@ -97,6 +97,7 @@ export async function startHttpServer(deps: HttpServerDeps): Promise<FastifyInst
   app.get('/strategies', async () => ({
     all: ALL_STRATEGIES.map(s => ({
       id: s.id, name: s.name, icon: s.icon, style: s.style,
+      category: s.category,
       expectedWR: s.expectedWR, slMul: s.slMul, tpMul: s.tpMul,
       optimalTF: s.optimalTF, desc: s.desc,
       enabled: deps.config.strategyEnabled.includes(s.id),

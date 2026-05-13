@@ -33,6 +33,7 @@ export const mssChoCH: StrategyDef = {
   name: 'MSS / ChoCH (SMC A+)',
   icon: '🎯',
   style: 'smc',
+  category: 'library',
   expectedWR: '65-72%',
   slMul: 0.8,
   tpMul: 1.8,

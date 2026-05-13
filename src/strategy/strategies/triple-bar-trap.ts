@@ -35,6 +35,7 @@ export const tripleBarTrap: StrategyDef = {
   name: 'Triple Bar Trap',
   icon: '🪤',
   style: 'reversal',
+  category: 'library',
   expectedWR: '65-70%',
   slMul: 0.9,
   tpMul: 1.5,

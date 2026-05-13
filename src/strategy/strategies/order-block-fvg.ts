@@ -98,6 +98,7 @@ export const orderBlockFvg: StrategyDef = {
   name: 'Order Block + FVG',
   icon: '⊟',
   style: 'smc',
+  category: 'library',
   expectedWR: '62-70%',
   slMul: 0.9,
   tpMul: 2.2,

@@ -84,6 +84,7 @@ export interface StrategyMeta {
   name: string
   icon: string
   style: string
+  category: 'adaptive' | 'library'
   expectedWR: string
   slMul: number
   tpMul: number

@@ -57,6 +57,31 @@ export function lowestLow(candles: Candle[], lookback: number, i: number): numbe
   return l
 }
 
+/**
+ * ADX (Average Directional Index) — misura forza del trend, 0..100.
+ *   < 20  = no trend (ranging)
+ *   20-25 = trend debole
+ *   > 25  = trend forte
+ */
+export function adx(candles: Candle[], period: number, i: number): number | null {
+  if (i < period * 2) return null
+  let trSum = 0, dmPlusSum = 0, dmMinusSum = 0
+  for (let j = i - period + 1; j <= i; j++) {
+    const c = candles[j]!, p = candles[j - 1]!
+    const tr = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close))
+    const upMove = c.high - p.high
+    const dnMove = p.low - c.low
+    const dmPlus = upMove > dnMove && upMove > 0 ? upMove : 0
+    const dmMinus = dnMove > upMove && dnMove > 0 ? dnMove : 0
+    trSum += tr; dmPlusSum += dmPlus; dmMinusSum += dmMinus
+  }
+  if (trSum === 0) return null
+  const diPlus = 100 * dmPlusSum / trSum
+  const diMinus = 100 * dmMinusSum / trSum
+  const dx = 100 * Math.abs(diPlus - diMinus) / Math.max(diPlus + diMinus, 1e-9)
+  return dx
+}
+
 export function bb(
   candles: Candle[],
   period: number,

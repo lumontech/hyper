@@ -81,6 +81,7 @@ export const ictSilverBullet: StrategyDef = {
   name: 'ICT Silver Bullet',
   icon: '🥈',
   style: 'smc',
+  category: 'library',
   expectedWR: '65-75%',
   slMul: 0.8,
   tpMul: 2.0,

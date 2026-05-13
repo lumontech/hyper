@@ -130,7 +130,9 @@ export interface StrategyDef {
   id: string
   name: string
   icon: string
-  style: 'trend' | 'mean-reversion' | 'breakout' | 'reversal' | 'smc' | 'pa' | 'momentum'
+  style: 'trend' | 'mean-reversion' | 'breakout' | 'reversal' | 'smc' | 'pa' | 'momentum' | 'adaptive'
+  /** Categoria visualizzazione: 'adaptive' = strategie meta scritte da Claude. 'library' = port da trade.fondamentale. */
+  category: 'adaptive' | 'library'
   expectedWR: string            // human-readable es. '65-72%'
   slMul: number
   tpMul: number
