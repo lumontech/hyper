@@ -10,7 +10,7 @@ import './index.css'
 // history.replaceState cambia solo location.href, NON baseURI/document.URL.
 // Unica soluzione: location.replace() su URL pulito → browser ricarica usando
 // le credentials già in session cache → fetch poi funzionano.
-if (window.location.href.includes('@') || window.location.username) {
+if (window.location.href.includes('@')) {
   const cleanUrl = window.location.protocol + '//' + window.location.host
     + window.location.pathname + window.location.search + window.location.hash
   window.location.replace(cleanUrl)
