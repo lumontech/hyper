@@ -3,16 +3,22 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 
-// Workaround: Chrome blocca fetch() su URL con credentials inline (user:pwd@host).
-// Se la pagina è caricata via URL con credentials, le rimuoviamo dal pathname
-// preservando la session auth basic memorizzata da Chrome.
-if (window.location.href.includes('@')) {
-  const cleanUrl = window.location.protocol + '//' + window.location.host + window.location.pathname + window.location.search + window.location.hash
-  window.history.replaceState(null, '', cleanUrl)
+// Workaround sicurezza Chrome:
+// Quando la pagina è caricata con `https://user:pwd@host/`, document.baseURI mantiene
+// le credentials e Chrome blocca ogni fetch() relativo con:
+//   "Request cannot be constructed from a URL that includes credentials"
+// history.replaceState cambia solo location.href, NON baseURI/document.URL.
+// Unica soluzione: location.replace() su URL pulito → browser ricarica usando
+// le credentials già in session cache → fetch poi funzionano.
+if (window.location.href.includes('@') || window.location.username) {
+  const cleanUrl = window.location.protocol + '//' + window.location.host
+    + window.location.pathname + window.location.search + window.location.hash
+  window.location.replace(cleanUrl)
+  // Stop bootstrap: il browser sta ricaricando.
+} else {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  )
 }
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
