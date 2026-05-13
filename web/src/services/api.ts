@@ -1,13 +1,8 @@
 // Client HTTP per il backend Node.
-// In dev: BASE = 'http://127.0.0.1:7777' (chiamate CORS al backend separato).
-// In prod: usa window.location.origin (URL assoluto) per bypassare baseURI bug Chrome
-// quando la pagina è caricata con credentials inline (user:pwd@host).
+// Usa SEMPRE URL assoluto basato su window.location.origin per bypassare il bug Chrome
+// che blocca fetch quando la pagina ha credentials inline (user:pwd@host) in baseURI.
 
-declare const __API_BASE__: string
-// In prod (build) __API_BASE__ è stringa vuota → usa origin runtime con URL assoluto.
-const BASE = __API_BASE__ && __API_BASE__.startsWith('http')
-  ? __API_BASE__
-  : (typeof window !== 'undefined' ? window.location.origin : '') + (__API_BASE__ || '')
+const BASE = (typeof window !== 'undefined') ? window.location.origin : ''
 
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
