@@ -17,6 +17,7 @@ import type { EventsCalendar } from '../strategy/events-calendar.js'
 import { ALL_STRATEGIES } from '../strategy/strategy-registry.js'
 import { simulateAccount } from '../engine/simulator.js'
 import { detectAllPatterns } from '../strategy/patterns.js'
+import { calculateVolumeProfile, fetchFundingRates } from '../strategy/volume-profile.js'
 
 export interface HttpServerDeps {
   config: Config
@@ -242,6 +243,66 @@ export async function startHttpServer(deps: HttpServerDeps): Promise<FastifyInst
       upcoming: deps.events.upcoming(14),
       recent: deps.events.recent(24),
       snapshot: deps.events.snapshot(),
+    }
+  })
+
+  // ── GET /volume/:coin ───────────────────────────────────────────
+  app.get<{ Params: { coin: string }; Querystring: { tf?: string; limit?: string } }>(
+    '/volume/:coin', async (req, reply) => {
+      const coin = req.params.coin.toUpperCase()
+      if (!deps.config.allowedCoins.includes(coin)) return reply.code(400).send({ error: 'coin not allowed' })
+      const tf = req.query.tf ?? deps.config.strategyTimeframe
+      const limit = Math.min(parseInt(req.query.limit ?? '200'), 500)
+      try {
+        const candles = await deps.client.fetchCandles(coin, tf, limit)
+        const profile = calculateVolumeProfile(candles)
+        return { coin, tf, profile }
+      } catch (err) {
+        return reply.code(500).send({ error: String(err) })
+      }
+    },
+  )
+
+  // ── GET /funding ────────────────────────────────────────────────
+  let fundingCache: { ts: number; data: unknown } = { ts: 0, data: null }
+  app.get('/funding', async (_req, reply) => {
+    // Cache 60s per non ddosare HL
+    if (Date.now() - fundingCache.ts < 60_000 && fundingCache.data) {
+      return { cached: true, data: fundingCache.data }
+    }
+    try {
+      const rates = await fetchFundingRates(deps.config.network)
+      const filtered = rates.filter(r => deps.config.allowedCoins.includes(r.coin))
+      fundingCache = { ts: Date.now(), data: filtered }
+      return { cached: false, data: filtered }
+    } catch (err) {
+      return reply.code(500).send({ error: String(err) })
+    }
+  })
+
+  // ── GET /demo ───────────────────────────────────────────────────
+  // Stato demo trading dettagliato: equity, trades, stats, equity curve
+  app.get('/demo', async () => {
+    const r = deps.risk.snapshot()
+    const curve = deps.db?.getEquityCurve(500) ?? []
+    const fills = deps.db?.getRecentFills(100) ?? []
+    const startBal = (r as { startingBalance?: number }).startingBalance ?? 1000
+    const demoEq = (r as { demoEquity?: number }).demoEquity ?? startBal
+    const trades = (r as { demoTrades?: number }).demoTrades ?? 0
+    const wins = (r as { demoWins?: number }).demoWins ?? 0
+    const losses = (r as { demoLosses?: number }).demoLosses ?? 0
+    const closed = wins + losses
+    const pnl = demoEq - startBal
+    const pnlPct = startBal > 0 ? (pnl / startBal) * 100 : 0
+    return {
+      startingBalance: startBal,
+      currentEquity: demoEq,
+      pnl,
+      pnlPct,
+      trades, wins, losses,
+      winRate: closed > 0 ? (wins / closed) * 100 : 0,
+      equityCurve: curve,
+      recentFills: fills,
     }
   })
 

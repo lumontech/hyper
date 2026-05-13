@@ -216,6 +216,9 @@ export const api = {
   router:     () => jsonFetch<RouterSnapshot>('/router'),
   patterns:   (coin: string, tf = '15m') => jsonFetch<PatternsResponse>(`/patterns/${coin}?tf=${tf}`),
   events:     () => jsonFetch<{ upcoming: CryptoEvent[]; recent: CryptoEvent[]; snapshot: { total: number } }>('/events'),
+  volume:     (coin: string, tf = '15m') => jsonFetch<{ coin: string; tf: string; profile: { poc: number; vah: number; val: number; totalVolume: number; hvn: number[]; lvn: number[]; buckets: { price: number; volume: number }[] } | null }>(`/volume/${coin}?tf=${tf}`),
+  funding:    () => jsonFetch<{ cached: boolean; data: Array<{ coin: string; funding: number; openInterest: number; markPrice: number; premium: number }> }>('/funding'),
+  demo:       () => jsonFetch<{ startingBalance: number; currentEquity: number; pnl: number; pnlPct: number; trades: number; wins: number; losses: number; winRate: number; equityCurve: Array<{ ts: number; equity_usd: number; daily_pnl_usd: number | null }>; recentFills: Array<Record<string, unknown>> }>('/demo'),
   halt:       () => jsonFetch<{ halted: boolean }>('/halt',   { method: 'POST', headers: { 'X-Confirm': 'yes' } }),
   resume:     () => jsonFetch<{ halted: boolean }>('/resume', { method: 'POST', headers: { 'X-Confirm': 'yes' } }),
 }

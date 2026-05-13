@@ -126,9 +126,13 @@ function ChartPanel({ coin }: { coin: string }) {
     const chart = createChart(ref.current, {
       width: ref.current.clientWidth,
       height: 380,
-      layout: { background: { color: '#0a0e16' }, textColor: '#e5e9f0' },
+      layout: {
+        background: { color: '#0a0e16' },
+        textColor: '#e5e9f0',
+        attributionLogo: false,  // rimuove watermark TradingView (i dati sono HL native)
+      } as never,
       grid:   { vertLines: { color: '#1a2030' }, horzLines: { color: '#1a2030' } },
-      timeScale: { borderColor: '#1a2030', timeVisible: true },
+      timeScale: { borderColor: '#1a2030', timeVisible: true, secondsVisible: false },
       rightPriceScale: { borderColor: '#1a2030' },
       crosshair: { mode: 1 },
     })
@@ -170,7 +174,7 @@ function ChartPanel({ coin }: { coin: string }) {
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-mono text-sm">{coin}USDC · {tf}</h2>
         <div className="flex gap-1">
-          {['5m', '15m', '1h', '4h', '1D'].map(t => (
+          {['1m', '5m', '15m', '1h', '4h', '1D'].map(t => (
             <button
               key={t}
               onClick={() => setTf(t)}

@@ -3,6 +3,7 @@ import { Header } from './components/Header'
 import { Sidebar } from './components/Sidebar'
 import { Dashboard } from './panels/Dashboard'
 import { AutoTrader } from './panels/AutoTrader'
+import { DemoAccount } from './panels/DemoAccount'
 import { Backtest } from './panels/Backtest'
 import { Strategies } from './panels/Strategies'
 import { Positions } from './panels/Positions'
@@ -58,6 +59,7 @@ export default function App() {
         <main className="flex-1 overflow-auto p-4 fade-in" key={activePanel}>
           {activePanel === 'dashboard'  && <Dashboard />}
           {activePanel === 'autotrader' && <AutoTrader />}
+          {activePanel === 'demo'       && <DemoAccount />}
           {activePanel === 'backtest'   && <Backtest />}
           {activePanel === 'strategies' && <Strategies />}
           {activePanel === 'positions'  && <Positions />}

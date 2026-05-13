@@ -10,6 +10,7 @@ interface Item {
 const ITEMS: Item[] = [
   { id: 'dashboard',  label: 'Dashboard',   icon: '◎', desc: 'Live prices + chart' },
   { id: 'autotrader', label: 'Auto-Trader', icon: '⚡', desc: 'Signals + orders live' },
+  { id: 'demo',       label: 'Demo €1000',  icon: '💰', desc: 'Account simulato + equity' },
   { id: 'backtest',   label: 'Backtest',    icon: '⊞', desc: '30/60/90 days sim' },
   { id: 'strategies', label: 'Strategies',  icon: '⚙', desc: 'WR, SL/TP, params' },
   { id: 'positions',  label: 'Positions',   icon: '◇', desc: 'Open + equity curve' },
