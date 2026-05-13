@@ -37,6 +37,16 @@ export class WebSocketFeed {
   // Per ogni (coin, interval) tieni l'ultimo timestamp visto per detectare close
   private lastCandleTime = new Map<string, number>()
 
+  // Debug counters esposti via /debug
+  public stats = {
+    candleMessages: 0,
+    candleCloses: 0,
+    midsMessages: 0,
+    fillMessages: 0,
+    perCoinCandles: {} as Record<string, number>,
+    perCoinCloses: {} as Record<string, number>,
+  }
+
   constructor(private readonly deps: WsFeedDeps) {}
 
   subscribe(coin: string, interval: string): void {
@@ -131,16 +141,23 @@ export class WebSocketFeed {
       }
       const key = `${k.s}:${k.i}`
       const prevTs = this.lastCandleTime.get(key) ?? 0
-      // Close = quando vediamo una candela con timestamp > precedente (nuova bar)
-      const isClose = candle.time > prevTs
-      if (isClose && prevTs > 0) {
-        // Il segnale è valutato sulla candela appena chiusa (prevTs), non sulla nuova
-        // ma HL invia solo l'aggiornamento running della candela attuale.
-        // Strategia: notifichiamo isClose=true ad ogni transizione di time.
+      // Close = quando vediamo una candela con timestamp > precedente (nuova bar).
+      // CRITICAL FIX: con prevTs=0 (primissimo update), isClose ritornava true sempre.
+      // Ora: isClose=true SOLO se prevTs > 0 (cioè abbiamo già visto una candela prima).
+      const isClose = prevTs > 0 && candle.time > prevTs
+
+      // Debug counters
+      this.stats.candleMessages++
+      this.stats.perCoinCandles[k.s] = (this.stats.perCoinCandles[k.s] ?? 0) + 1
+      if (isClose) {
+        this.stats.candleCloses++
+        this.stats.perCoinCloses[k.s] = (this.stats.perCoinCloses[k.s] ?? 0) + 1
+        this.deps.logger.info({ coin: k.s, interval: k.i, prevTime: prevTs, newTime: candle.time }, '[WS] candle CLOSE')
       }
       this.lastCandleTime.set(key, candle.time)
       this.deps.onCandle(k.s, candle, isClose)
     } else if (msg.channel === 'allMids' && msg.data) {
+      this.stats.midsMessages++
       const mids = (msg.data as { mids?: Record<string, string> }).mids ?? {}
       const parsed: Record<string, number> = {}
       for (const [coin, val] of Object.entries(mids)) {
@@ -149,6 +166,7 @@ export class WebSocketFeed {
       }
       this.deps.onMids?.(parsed)
     } else if (msg.channel === 'userFills' && msg.data) {
+      this.stats.fillMessages++
       const fillsData = msg.data as { fills?: Array<{ coin: string; side: string; px: string; sz: string; fee: string; oid: number; time: number; closedPnl?: string }> }
       for (const f of fillsData.fills ?? []) {
         const fill: Fill = {

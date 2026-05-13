@@ -31,6 +31,7 @@ export interface HttpServerDeps {
   db?: BotDb
   heartbeat?: Heartbeat
   events?: EventsCalendar
+  wsStats?: Record<string, unknown>
 }
 
 const HALT_FILE = resolve('.HALT')
@@ -236,6 +237,23 @@ export async function startHttpServer(deps: HttpServerDeps): Promise<FastifyInst
       }
     },
   )
+
+  // ── GET /debug ──────────────────────────────────────────────────
+  // Diagnostica: stato counter interni router + WS feed
+  app.get('/debug', async () => {
+    // wsStats viene iniettato da main.ts se disponibile
+    const wsStats = (deps as { wsStats?: Record<string, unknown> }).wsStats
+    const routerSnap = deps.router?.snapshot()
+    const dbHasOrders = deps.db?.getRecentOrders(5).length ?? 0
+    const dbHasFills = deps.db?.getRecentFills(5).length ?? 0
+    return {
+      uptime: Math.floor((Date.now() - deps.startedAt) / 1000),
+      ws: wsStats ?? { note: 'wsStats not wired' },
+      router: routerSnap,
+      db: { orders_last5: dbHasOrders, fills_last5: dbHasFills },
+      heartbeat: deps.heartbeat?.snapshot(),
+    }
+  })
 
   // ── GET /events ─────────────────────────────────────────────────
   app.get('/events', async () => {

@@ -180,10 +180,11 @@ async function main() {
     db.recordEquity(Date.now(), acct.equityUsd, acct.marginUsedUsd, acct.positions.length, dailyPnl)
   }, 60000)
 
-  // 14. HTTP API
+  // 14. HTTP API (passa anche ws.stats per /debug endpoint)
   await startHttpServer({
     config, logger, client, risk, startedAt,
     router, positions, db, heartbeat, events,
+    wsStats: ws.stats as never,
   })
 
   logger.info({ webUI: `http://${config.apiBind}:${config.apiPort}` }, '[BOOT] startup complete — autonomous trading loop active')
