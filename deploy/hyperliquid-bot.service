@@ -1,0 +1,50 @@
+# systemd unit — alternativa a Docker se preferisci Node nativo.
+# Install:
+#   sudo cp deploy/hyperliquid-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now hyperliquid-bot
+# Logs:
+#   journalctl -u hyperliquid-bot -f
+
+[Unit]
+Description=Hyperliquid Auto-Trading Platform
+Documentation=https://github.com/yourrepo/hyperliquid-platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# ADATTA: utente non-root dedicato (NON usare root!)
+User=hluser
+Group=hluser
+# ADATTA: path repo
+WorkingDirectory=/opt/hyperliquid-bot
+EnvironmentFile=/opt/hyperliquid-bot/.env
+Environment=NODE_ENV=production
+Environment=LOG_PRETTY=false
+Environment=LOG_LEVEL=info
+Environment=API_BIND=127.0.0.1
+Environment=API_PORT=7777
+
+# Avvio: tsx via npx (no build separato). Per produzione robusta, sostituire con `node dist/...` dopo `npm run build`.
+ExecStart=/usr/bin/npm run dev
+
+# Graceful shutdown: SIGTERM → kill-switch flat + exit
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/hyperliquid-bot/data
+# Limiti risorse
+MemoryMax=512M
+CPUQuota=100%
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

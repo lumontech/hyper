@@ -1,0 +1,24 @@
+node_modules
+web/node_modules
+dist
+web/dist
+
+# VPS deploy config (contiene IP / utente / chiave SSH path)
+vps-config.txt
+.env
+.env.local
+.env.*.local
+.HALT
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/audit/*.log
+data/results/*.json
+data/results/*.csv
+*.log
+.DS_Store
+.vscode/settings.json
+.idea
+coverage
+.tsbuildinfo

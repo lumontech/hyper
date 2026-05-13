@@ -1,0 +1,35 @@
+# Alternativa Caddy: HTTPS automatico + auth + reverse proxy in 12 righe.
+# Install Caddy: vedi caddyserver.com/docs/install
+# Restart: sudo systemctl reload caddy
+#
+# Sostituisci `hyperliquid.tuodominio.com` con il tuo sottodominio.
+# Genera hash password: caddy hash-password
+
+hyperliquid.tuodominio.com {
+    basicauth {
+        stefano <BCRYPT_HASH_QUI>
+    }
+
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy 127.0.0.1:7777
+    }
+
+    handle {
+        root * /opt/hyperliquid-bot/web-dist
+        try_files {path} /index.html
+        file_server
+    }
+
+    log {
+        output file /var/log/caddy/hyperliquid.log
+        format json
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+    }
+}

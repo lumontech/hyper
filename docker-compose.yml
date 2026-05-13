@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────────
+# docker-compose per Hyperliquid Platform su VPS Contabo Ubuntu.
+# Convivenza con trade.fondamentale (porta 5173):
+#   • backend Hyperliquid bind 127.0.0.1:7777 (mai 0.0.0.0)
+#   • frontend statico servito DAL backend → nginx proxy unico
+#   • nginx fa: / → trade.fondamentale, /hyperliquid/* → questo container
+# ─────────────────────────────────────────────────────────────────────
+services:
+  hyperliquid-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Sottodominio dedicato: il frontend vive a root '/'.
+        # Niente path-prefix → niente collisioni con altre piattaforme.
+        VITE_BASE: /
+        # API stesso origine, chiamate relative
+        VITE_API_BASE: ""
+    image: hyperliquid-platform:0.2.0
+    container_name: hyperliquid-bot
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7777:7777"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - LOG_PRETTY=false
+      - LOG_LEVEL=info
+      - API_BIND=0.0.0.0
+      - API_PORT=7777
+      - WEB_DIST_PATH=/app/web-dist
+      - DB_PATH=/app/data/bot.db
+      - AUDIT_LOG_PATH=/app/data/audit/signed-payloads.log
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7777/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
