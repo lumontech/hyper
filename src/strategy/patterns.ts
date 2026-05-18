@@ -135,14 +135,15 @@ export function detectCandlestickPatterns(candles: Candle[], lookback = 20): Pat
         candleIndex: i, time: c.time, bias: 'bearish', reliability: 'high',
         description: 'Pattern 3-bar: rialzista forte → piccola/doji → ribassista che rompe mid-range. Reversal classico.' })
     }
+    const cRange = c.high - c.low
     // Tweezer Bottom
-    if (Math.abs(c.low - prev.low) / Math.max(c.range, 1e-9) < 0.05 && ap.bearish && a.bullish && trend5 < 0) {
+    if (Math.abs(c.low - prev.low) / Math.max(cRange, 1e-9) < 0.05 && ap.bearish && a.bullish && trend5 < 0) {
       out.push({ type: 'candlestick', id: 'tweezerBottom', name: 'Tweezer Bottom', italian: 'Tweezer Bottom',
         candleIndex: i, time: c.time, bias: 'bullish', reliability: 'medium',
         description: 'Due low identici in downtrend: doppio rifiuto sul supporto.' })
     }
     // Tweezer Top
-    if (Math.abs(c.high - prev.high) / Math.max(c.range, 1e-9) < 0.05 && ap.bullish && a.bearish && trend5 > 0) {
+    if (Math.abs(c.high - prev.high) / Math.max(cRange, 1e-9) < 0.05 && ap.bullish && a.bearish && trend5 > 0) {
       out.push({ type: 'candlestick', id: 'tweezerTop', name: 'Tweezer Top', italian: 'Tweezer Top',
         candleIndex: i, time: c.time, bias: 'bearish', reliability: 'medium',
         description: 'Due high identici in uptrend: doppio rifiuto sulla resistenza.' })
