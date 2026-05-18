@@ -12,6 +12,11 @@ export const COIN_MAP: Record<string, string> = {
   SOL: 'SOL', SOLUSDC: 'SOL',
   XRP: 'XRP', XRPUSDC: 'XRP',
   BNB: 'BNB', BNBUSDC: 'BNB',
+  HYPE: 'HYPE',
+  SUI: 'SUI',
+  AVAX: 'AVAX',
+  DOGE: 'DOGE',
+  AAVE: 'AAVE',
 }
 
 // TF interno → label HL
@@ -62,7 +67,7 @@ export class HyperliquidClient {
     return this.wsBase
   }
 
-  /** Fetch candles via /info endpoint. No auth required. */
+  /** Fetch candles via /info endpoint. Auto-paginazione se limit > 5000 (HL hard cap per call). */
   async fetchCandles(coin: string, interval: string, limit = 500): Promise<Candle[]> {
     const hlCoin = COIN_MAP[coin]
     if (!hlCoin) throw new Error(`Unknown coin: ${coin}`)
@@ -70,9 +75,41 @@ export class HyperliquidClient {
     if (!tf) throw new Error(`Unknown interval: ${interval}`)
     const tfSec: Record<string, number> = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }
     const sec = tfSec[tf] ?? 3600
+
+    const CHUNK = 5000   // HL massimo per chiamata
     const endTime = Date.now()
     const startTime = endTime - limit * sec * 1000
 
+    // Single-call se entro il limite
+    if (limit <= CHUNK) return this.fetchCandleChunk(hlCoin, tf, startTime, endTime)
+
+    // Paginazione: HL ignora startTime se troppo lontano e ritorna le ULTIME 5000 candele.
+    // Quindi paginiamo all'indietro: cursore = endTime, scende ogni iterazione.
+    const collected: Candle[] = []
+    let cursorEnd = endTime
+    const oldestNeeded = startTime
+    const maxIterations = Math.ceil(limit / CHUNK) + 2
+    for (let iter = 0; iter < maxIterations; iter++) {
+      const chunkStart = Math.max(cursorEnd - CHUNK * sec * 1000, oldestNeeded)
+      const part = await this.fetchCandleChunk(hlCoin, tf, chunkStart, cursorEnd)
+      if (part.length === 0) break
+      // Prepend del chunk (sono cronologici ascendenti); dedup su time
+      for (let i = part.length - 1; i >= 0; i--) {
+        const c = part[i]!
+        if (collected.length === 0 || c.time < collected[0]!.time) collected.unshift(c)
+      }
+      // Se HL ha ritornato meno di CHUNK candele, abbiamo raggiunto il bordo
+      if (part.length < CHUNK) break
+      // Avanza cursor all'inizio del chunk appena ricevuto (-1s per evitare duplicati)
+      const oldestInChunk = part[0]!.time * 1000
+      if (oldestInChunk <= oldestNeeded) break
+      cursorEnd = oldestInChunk - 1
+      await new Promise(r => setTimeout(r, 120))
+    }
+    return collected
+  }
+
+  private async fetchCandleChunk(hlCoin: string, tf: string, startTime: number, endTime: number): Promise<Candle[]> {
     const body = {
       type: 'candleSnapshot',
       req: { coin: hlCoin, interval: tf, startTime, endTime },
