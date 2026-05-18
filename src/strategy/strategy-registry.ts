@@ -14,6 +14,7 @@ import { ictSilverBullet } from './strategies/ict-silver-bullet.js'
 import { orderBlockFvg } from './strategies/order-block-fvg.js'
 import { donchianBreakout } from './strategies/donchian-breakout.js'
 import { zigzagRsi } from './strategies/zigzag-rsi.js'
+import { fundingHarvest } from './strategies/funding-harvest.js'
 
 export const ALL_STRATEGIES: StrategyDef[] = [
   // ── Adaptive (scritta da Claude) ──
@@ -28,6 +29,8 @@ export const ALL_STRATEGIES: StrategyDef[] = [
   orderBlockFvg,
   donchianBreakout,    // turtle classic
   zigzagRsi,           // TradingView top-voted ETHUSDT
+  // ── Funding (edge strutturale Hyperliquid) ──
+  fundingHarvest,
 ]
 
 export function getEnabledStrategies(ids: string[]): StrategyDef[] {
@@ -43,9 +46,10 @@ export function isStrategyCompatibleWithCoin(strategy: StrategyDef, coin: string
   return strategy.supportedCoins.includes(coin)
 }
 
-export function strategiesByCategory(): { adaptive: StrategyDef[]; library: StrategyDef[] } {
+export function strategiesByCategory(): { adaptive: StrategyDef[]; library: StrategyDef[]; funding: StrategyDef[] } {
   return {
     adaptive: ALL_STRATEGIES.filter(s => s.category === 'adaptive'),
     library:  ALL_STRATEGIES.filter(s => s.category === 'library'),
+    funding:  ALL_STRATEGIES.filter(s => s.category === 'funding'),
   }
 }

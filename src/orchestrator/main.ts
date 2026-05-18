@@ -17,6 +17,7 @@ import { AuditLog } from '../persistence/audit-log.js'
 import { SignalRouter } from './signal-router.js'
 import { getEnabledStrategies } from '../strategy/strategy-registry.js'
 import { EventsCalendar } from '../strategy/events-calendar.js'
+import { LiveFundingPoller } from '../core/funding-history.js'
 import { startHttpServer } from '../api/http-server.js'
 
 async function main() {
@@ -86,8 +87,17 @@ async function main() {
   const events = new EventsCalendar({ logger, fetchExternal: true, fetchIntervalMin: 360 })
   events.start()
 
-  // 7. Signal router (con pattern booster + event guard)
-  const router = new SignalRouter({ config, logger, executor, positions, strategies, events })
+  // 6c. Live funding rate poller (per strategia fundingHarvest)
+  const fundingPoller = new LiveFundingPoller({
+    network: config.network,
+    coins: config.allowedCoins,
+    pollMs: 60000,
+    logger,
+  })
+  fundingPoller.start()
+
+  // 7. Signal router (con pattern booster + event guard + funding live)
+  const router = new SignalRouter({ config, logger, executor, positions, strategies, events, fundingPoller })
 
   // 8. Heartbeat per coin
   const heartbeat = new Heartbeat({
@@ -172,18 +182,30 @@ async function main() {
   if (config.masterAddress) ws.subscribeUserFills()
   ws.start()
 
-  // 13. Equity recorder loop (1/min)
-  setInterval(() => {
-    const acct = account.current()
-    if (!acct) return
+  // 13. Equity recorder loop (1/min) — registra anche in dry-run usando demoEquity.
+  const recordEquityNow = () => {
+    let equityUsd: number, marginUsedUsd: number, nPositions: number
+    if (config.dryRun) {
+      equityUsd = risk.effectiveEquity()
+      marginUsedUsd = 0
+      nPositions = positions.list().length
+    } else {
+      const acct = account.current()
+      if (!acct) return
+      equityUsd = acct.equityUsd
+      marginUsedUsd = acct.marginUsedUsd
+      nPositions = acct.positions.length
+    }
     const dailyPnl = risk.snapshot().dailyPnlUsd
-    db.recordEquity(Date.now(), acct.equityUsd, acct.marginUsedUsd, acct.positions.length, dailyPnl)
-  }, 60000)
+    db.recordEquity(Date.now(), equityUsd, marginUsedUsd, nPositions, dailyPnl)
+  }
+  recordEquityNow()                  // primo punto subito al boot, no waiting 60s
+  setInterval(recordEquityNow, 60000)
 
   // 14. HTTP API (passa anche ws.stats per /debug endpoint)
   await startHttpServer({
     config, logger, client, risk, startedAt,
-    router, positions, db, heartbeat, events,
+    router, positions, db, heartbeat, events, fundingPoller,
     wsStats: ws.stats as never,
   })
 

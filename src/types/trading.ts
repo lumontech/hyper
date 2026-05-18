@@ -124,15 +124,29 @@ export interface SimulationResult {
   }
 }
 
-export type StrategyFn = (candles: Candle[], i: number) => Signal | null
+/**
+ * Context extra opzionale passato alle strategie. Permette a strategie come `fundingHarvest`
+ * di accedere a dati non-OHLCV (funding rate, open interest, etc.) senza rompere la signature
+ * delle 10 strategie classiche TA che non lo usano.
+ */
+export interface StrategyContext {
+  /** Funding rate corrente per il coin (decimale, es. 0.0001 = 0.01% / h). */
+  fundingRate?: number
+  /** Premium perp vs oracle (decimale). */
+  premium?: number
+  /** Timestamp prossimo pagamento funding (ms). */
+  nextFundingMs?: number
+}
+
+export type StrategyFn = (candles: Candle[], i: number, ctx?: StrategyContext) => Signal | null
 
 export interface StrategyDef {
   id: string
   name: string
   icon: string
-  style: 'trend' | 'mean-reversion' | 'breakout' | 'reversal' | 'smc' | 'pa' | 'momentum' | 'adaptive'
+  style: 'trend' | 'mean-reversion' | 'breakout' | 'reversal' | 'smc' | 'pa' | 'momentum' | 'adaptive' | 'funding'
   /** Categoria visualizzazione: 'adaptive' = strategie meta scritte da Claude. 'library' = port da trade.fondamentale. */
-  category: 'adaptive' | 'library'
+  category: 'adaptive' | 'library' | 'funding'
   expectedWR: string            // human-readable es. '65-72%'
   slMul: number
   tpMul: number
@@ -140,4 +154,6 @@ export interface StrategyDef {
   supportedCoins: string[] | 'all'
   desc: string
   fn: StrategyFn
+  /** Se true, la strategia richiede `ctx.fundingRate` per funzionare. Router salta se mancante. */
+  requiresFunding?: boolean
 }

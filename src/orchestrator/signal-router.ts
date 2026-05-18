@@ -10,13 +10,16 @@
 
 import type { Logger } from 'pino'
 import type { Config } from '../utils/config.js'
-import type { Candle, Signal, StrategyDef } from '../types/trading.js'
+import type { Candle, Signal, StrategyDef, StrategyContext } from '../types/trading.js'
 import type { LiveExecutor } from '../engine/live-executor.js'
 import type { PositionManager } from '../engine/position-manager.js'
 import type { EventsCalendar } from '../strategy/events-calendar.js'
+import type { LiveFundingPoller } from '../core/funding-history.js'
 import { atr } from '../strategy/indicators.js'
 import { isStrategyCompatibleWithCoin } from '../strategy/strategy-registry.js'
 import { evaluateSignalConfluence } from '../strategy/patterns.js'
+import { passesRegimeFilters } from '../strategy/regime-filters.js'
+import { getCoinStrategyParams } from '../strategy/coin-params.js'
 
 const HIGH_CONVICTION_STYLES = new Set(['smc', 'reversal'])
 
@@ -27,6 +30,7 @@ export interface SignalRouterDeps {
   positions: PositionManager
   strategies: StrategyDef[]
   events?: EventsCalendar
+  fundingPoller?: LiveFundingPoller
 }
 
 export interface RouterStats {
@@ -35,6 +39,11 @@ export interface RouterStats {
   ordersAttempted: number
   ordersAccepted: number
   ordersRejected: number
+  evaluationsRun: number
+  evaluationsByCoin: Record<string, number>
+  strategyInvocations: Record<string, number>   // strategy.id → tot invocazioni
+  strategySignals: Record<string, number>       // strategy.id → tot signal non-null
+  skippedByRegime: Record<string, number>       // motivo regime-filter → count
   lastSignals: Array<{ ts: number; coin: string; strategy: string; direction: string; reason: string; status: string }>
 }
 
@@ -46,6 +55,11 @@ export class SignalRouter {
     ordersAttempted: 0,
     ordersAccepted: 0,
     ordersRejected: 0,
+    evaluationsRun: 0,
+    evaluationsByCoin: {},
+    strategyInvocations: {},
+    strategySignals: {},
+    skippedByRegime: {},
     lastSignals: [],
   }
 
@@ -86,22 +100,55 @@ export class SignalRouter {
   }
 
   private async evaluate(coin: string): Promise<void> {
-    const buf = this.candleBuffers.get(coin)
-    if (!buf || buf.length < 50) return
+    const fullBuf = this.candleBuffers.get(coin)
+    if (!fullBuf || fullBuf.length < 51) return
 
+    // CRITICAL FIX: quando isClose=true il WS ci ha appena dato la NUOVA bar appena aperta
+    // (open=high=low=close = primo tick). La bar appena CHIUSA è fullBuf[length-2].
+    // Trimmiamo il buffer escludendo la bar parziale per evitare contaminazione di indicatori
+    // e pattern recognition (che leggono buf[buf.length-1] implicitamente).
+    const buf = fullBuf.slice(0, fullBuf.length - 1)
     const lastIdx = buf.length - 1
-    const signals: Array<{ strategy: StrategyDef; signal: Signal }> = []
+    if (lastIdx < 50) return
+    // Build StrategyContext una volta per coin (funding rate live)
+    const ctx: StrategyContext = this.deps.fundingPoller
+      ? { ...this.deps.fundingPoller.contextFor(coin) }
+      : {}
+
+    const signals: Array<{ strategy: StrategyDef; signal: Signal; override?: { slMul: number; tpMul: number; tier: 'hard-robust' | 'soft-robust' | 'exploratory' } }> = []
     for (const strat of this.deps.strategies) {
       if (!isStrategyCompatibleWithCoin(strat, coin)) continue
+      // Strategie funding-dependent: skip se non abbiamo funding data
+      if (strat.requiresFunding && ctx.fundingRate === undefined) continue
+      // Coin-strategy whitelist: solo combo robuste dal walk-forward sono autorizzate.
+      const coinParams = getCoinStrategyParams(coin, strat.id)
+      this.stats.strategyInvocations[strat.id] = (this.stats.strategyInvocations[strat.id] ?? 0) + 1
       try {
-        const s = strat.fn(buf, lastIdx)
-        if (s?.direction) signals.push({ strategy: strat, signal: { ...s, strategyId: strat.id } })
+        const s = strat.fn(buf, lastIdx, ctx)
+        if (s?.direction) {
+          // Regime filters (ADX, RSI extreme, ATR floor, time-of-day) — uguale al backtest
+          const rf = passesRegimeFilters({ buf, i: lastIdx, strategy: strat, direction: s.direction })
+          if (!rf.pass) {
+            const reason = rf.reason ?? 'unknown'
+            this.stats.skippedByRegime[reason] = (this.stats.skippedByRegime[reason] ?? 0) + 1
+            continue
+          }
+          // Strategie non whitelisted vengono raccolte SOLO per confluence (non possono firmare da sole)
+          signals.push({
+            strategy: strat,
+            signal: { ...s, strategyId: strat.id },
+            override: coinParams ? { slMul: coinParams.slMul, tpMul: coinParams.tpMul, tier: coinParams.tier } : undefined,
+          })
+          this.stats.strategySignals[strat.id] = (this.stats.strategySignals[strat.id] ?? 0) + 1
+        }
       } catch (err) {
         this.deps.logger.warn({ coin, strategy: strat.id, err: String(err) }, '[ROUTER] strategy threw')
       }
     }
 
     this.stats.lastEvaluatedAt = Date.now()
+    this.stats.evaluationsRun++
+    this.stats.evaluationsByCoin[coin] = (this.stats.evaluationsByCoin[coin] ?? 0) + 1
     if (signals.length === 0) return
 
     this.stats.signalsGenerated += signals.length
@@ -111,23 +158,35 @@ export class SignalRouter {
     const longs = signals.filter(s => s.signal.direction === 'long')
     const shorts = signals.filter(s => s.signal.direction === 'short')
 
-    let chosen: { strategy: StrategyDef; signal: Signal } | null = null
+    let chosen: { strategy: StrategyDef; signal: Signal; override?: { slMul: number; tpMul: number; tier: 'hard-robust' | 'soft-robust' | 'exploratory' } } | null = null
     let confluence = 1
     if (longs.length > 0 && shorts.length > 0) {
       this.recordSignal(coin, signals[0]!.strategy.id, signals[0]!.signal.direction, signals[0]!.signal.reason, 'skipped:conflict')
       this.deps.logger.warn({ coin, longs: longs.length, shorts: shorts.length }, '[ROUTER] conflict, skipping')
       return
     } else if (longs.length >= 2) {
-      chosen = longs[0]!
+      // Confluence ≥2: preferisci la combo whitelisted (con override) come "leader" del sizing
+      chosen = longs.find(s => s.override) ?? longs[0]!
       confluence = longs.length
     } else if (shorts.length >= 2) {
-      chosen = shorts[0]!
+      chosen = shorts.find(s => s.override) ?? shorts[0]!
       confluence = shorts.length
     } else {
-      // single signal — filtro qualità
+      // single signal — gerarchia:
+      //   1. (coin, strategy) whitelisted dal walk-forward → trade pieno
+      //   2. style ∈ HIGH_CONVICTION_STYLES (smc, reversal) → fallback exploratory (risk 0.5%)
+      //   3. altrimenti skip
       const only = signals[0]!
-      if (HIGH_CONVICTION_STYLES.has(only.strategy.style)) {
+      if (only.override) {
         chosen = only
+        confluence = 1
+      } else if (HIGH_CONVICTION_STYLES.has(only.strategy.style)) {
+        // Fallback: SMC/reversal "qualified" anche senza whitelist, ma con risk dimezzato
+        chosen = {
+          strategy: only.strategy,
+          signal: only.signal,
+          override: { slMul: only.strategy.slMul, tpMul: only.strategy.tpMul, tier: 'exploratory' },
+        }
         confluence = 1
       } else {
         this.recordSignal(coin, only.strategy.id, only.signal.direction, only.signal.reason, 'skipped:low-conviction')
@@ -165,7 +224,8 @@ export class SignalRouter {
     const patternBoost = confluenceCheck.verdict === 'align' ? ' [pattern-align]' : ''
 
     this.stats.ordersAttempted++
-    const result = await this.deps.executor.execute(chosen.signal, coin, atrVal, markPrice)
+    // Passa override slMul/tpMul all'executor se la coppia è whitelisted
+    const result = await this.deps.executor.execute(chosen.signal, coin, atrVal, markPrice, chosen.override)
     if (result.ok) {
       this.stats.ordersAccepted++
       const reasonLabel = `${chosen.signal.reason}${confluence > 1 ? ` [confluence ${confluence}]` : ''}${patternBoost}`
