@@ -4,6 +4,9 @@
 
 import { atr } from '../strategy/indicators.js'
 import type { Candle, StrategyDef, SimulationResult, SimulationTrade, Direction } from '../types/trading.js'
+import { getSlippageForCoin, HL_TAKER_FEE } from './realistic-costs.js'
+import type { FundingPayment } from '../core/funding-history.js'
+import { buildFundingIndex, cumulativeFundingCostIndexed } from '../core/funding-history.js'
 
 export interface SimOpts {
   startingBalance?: number    // USD
@@ -15,11 +18,12 @@ export interface SimOpts {
   minWarmup?: number
   ruinThresholdPct?: number   // 50 = -50% del balance
   feeRate?: number            // taker fee es. 0.00045 (HL 0.045%)
-  slippageRate?: number       // es. 0.0002 (0.02%)
+  slippageRate?: number       // override opzionale; default = per-coin map
   compounding?: boolean
+  fundingSeries?: FundingPayment[]   // se passato, simula costo funding ora-per-ora
 }
 
-interface TradeOutcome {
+export interface TradeOutcome {
   outcome: 'tp' | 'sl' | 'timeout'
   rr: number
   rawRR: number
@@ -28,7 +32,14 @@ interface TradeOutcome {
   exitTime: number
 }
 
-function simulateTrade(
+/** Cost in R-multiple: (fee + slippage) round-trip diviso per il risk-distance in % */
+export function calcCostInR(slDist: number, entry: number, feeRate = 0.00045, slippageRate = 0.0002): number {
+  const slDistPct = slDist / entry
+  const costPct = (feeRate + slippageRate) * 2
+  return slDistPct > 0 ? costPct / slDistPct : 0
+}
+
+export function simulateTrade(
   candles: Candle[],
   i: number,
   direction: Direction,
@@ -81,11 +92,15 @@ export function simulateAccount(
     maxBars:          opts.maxBars ?? 30,
     slMul:            opts.slMul ?? strategy.slMul,
     tpMul:            opts.tpMul ?? strategy.tpMul,
+    fundingSeries:    opts.fundingSeries,
     ruinThresholdPct: opts.ruinThresholdPct ?? 50,
-    feeRate:          opts.feeRate ?? 0.00045,    // HL taker default
-    slippageRate:     opts.slippageRate ?? 0.0002,
+    feeRate:          opts.feeRate ?? HL_TAKER_FEE,
+    slippageRate:     opts.slippageRate ?? getSlippageForCoin(opts.symbol),
     compounding:      opts.compounding ?? true,
   }
+  const fundingIndex = cfg.fundingSeries && cfg.fundingSeries.length > 0
+    ? buildFundingIndex(cfg.fundingSeries)
+    : null
 
   if (!candles || candles.length < cfg.minWarmup + cfg.maxBars + 10) {
     return { error: 'Candele insufficienti' }
@@ -104,7 +119,24 @@ export function simulateAccount(
 
   for (let i = cfg.minWarmup; i < candles.length - cfg.maxBars; i++) {
     if (blown) break
-    const sig = strategy.fn(candles, i)
+    // Build StrategyContext con funding rate al timestamp della candela i (per fundingHarvest etc)
+    let ctx: import('../types/trading.js').StrategyContext = {}
+    if (cfg.fundingSeries && cfg.fundingSeries.length > 0) {
+      const tNow = candles[i]!.time
+      let lo = 0, hi = cfg.fundingSeries.length
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1
+        if (cfg.fundingSeries[mid]!.time <= tNow) lo = mid + 1
+        else hi = mid
+      }
+      const lastIdx = lo - 1
+      if (lastIdx >= 0) {
+        const fp = cfg.fundingSeries[lastIdx]!
+        ctx = { fundingRate: fp.rate, premium: fp.premium }
+      }
+    }
+    if (strategy.requiresFunding && ctx.fundingRate === undefined) continue
+    const sig = strategy.fn(candles, i, ctx)
     if (!sig?.direction) continue
 
     const a = atr(candles, 14, i)
@@ -116,9 +148,17 @@ export function simulateAccount(
     const trade = simulateTrade(candles, i, sig.direction, cfg.slMul, cfg.tpMul, cfg.maxBars, costInR)
     if (!trade) continue
 
+    // Funding cost (in % notional) accumulato durante l'holding period
+    let fundingPctCost = 0
+    if (fundingIndex) {
+      fundingPctCost = cumulativeFundingCostIndexed(fundingIndex, candles[i]!.time, trade.exitTime, sig.direction)
+    }
+    // Convert funding % notional → R-multiple: fundingR = fundingPct × (entry / slDist)
+    const fundingInR = slDist > 0 ? fundingPctCost * (entry / slDist) : 0
+
     const riskBase = cfg.compounding ? balance : cfg.startingBalance
     const riskUsd = riskBase * cfg.riskPerTrade
-    const pnlUsd = trade.rr * riskUsd
+    const pnlUsd = (trade.rr - fundingInR) * riskUsd   // sottrai funding cost
     balance += pnlUsd
 
     trades.push({
