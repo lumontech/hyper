@@ -9,6 +9,7 @@ import { Backtest } from './panels/Backtest'
 import { Strategies } from './panels/Strategies'
 import { Positions } from './panels/Positions'
 import { Events } from './panels/Events'
+import { FundingLive } from './panels/FundingLive'
 import { useStore } from './store/store'
 import { api } from './services/api'
 import { subscribeAllMids } from './services/hl-feed'
@@ -66,6 +67,7 @@ export default function App() {
           {activePanel === 'strategies' && <Strategies />}
           {activePanel === 'positions'  && <Positions />}
           {activePanel === 'events'     && <Events />}
+          {activePanel === 'funding'    && <FundingLive />}
         </main>
       </div>
     </div>

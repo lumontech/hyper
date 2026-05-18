@@ -16,6 +16,7 @@ const ITEMS: Item[] = [
   { id: 'strategies', label: 'Strategies',  icon: '⚙', desc: 'WR, SL/TP, params' },
   { id: 'positions',  label: 'Positions',   icon: '◇', desc: 'Open + equity curve' },
   { id: 'events',     label: 'Eventi',      icon: '📅', desc: 'Calendario macro + crypto' },
+  { id: 'funding',    label: 'Funding Live',icon: '💸', desc: 'Funding rate HL realtime' },
 ]
 
 export function Sidebar() {

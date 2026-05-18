@@ -3,7 +3,7 @@ import { create } from 'zustand'
 export type Coin = 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'BNB'
 export const COINS: Coin[] = ['BTC', 'ETH', 'SOL', 'XRP', 'BNB']
 
-export type Panel = 'dashboard' | 'health' | 'autotrader' | 'demo' | 'backtest' | 'strategies' | 'positions' | 'events'
+export type Panel = 'dashboard' | 'health' | 'autotrader' | 'demo' | 'backtest' | 'strategies' | 'positions' | 'events' | 'funding'
 
 interface AppState {
   activePanel: Panel

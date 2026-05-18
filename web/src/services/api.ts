@@ -214,6 +214,7 @@ export const api = {
   events:     () => jsonFetch<{ upcoming: CryptoEvent[]; recent: CryptoEvent[]; snapshot: { total: number } }>('/events'),
   volume:     (coin: string, tf = '15m') => jsonFetch<{ coin: string; tf: string; profile: { poc: number; vah: number; val: number; totalVolume: number; hvn: number[]; lvn: number[]; buckets: { price: number; volume: number }[] } | null }>(`/volume/${coin}?tf=${tf}`),
   funding:    () => jsonFetch<{ cached: boolean; data: Array<{ coin: string; funding: number; openInterest: number; markPrice: number; premium: number }> }>('/funding'),
+  fundingLive:() => jsonFetch<{ updatedAt: number; ageSec: number | null; rates: Record<string, number>; annualizedPct: Record<string, number>; premiums: Record<string, number>; openInterest: Record<string, number>; markPrices: Record<string, number>; note?: string }>('/funding-live'),
   demo:       () => jsonFetch<{ startingBalance: number; currentEquity: number; pnl: number; pnlPct: number; trades: number; wins: number; losses: number; winRate: number; equityCurve: Array<{ ts: number; equity_usd: number; daily_pnl_usd: number | null }>; recentFills: Array<Record<string, unknown>> }>('/demo'),
   health:     () => jsonFetch<{
     score: number
