@@ -25,7 +25,7 @@ const ConfigSchema = z.object({
 
   // Risk (soft — clamped against hard limits in risk-manager.ts)
   maxDailyLossPct: num(2.0),
-  maxPositionUsd: num(500),
+  maxPositionUsd: num(1000),     // = demo equity (leva 1x); il sizer fa cap-and-resize se notional naturale eccede
   maxTotalExposureUsd: num(1500),
   maxLeverage: num(3),
   maxOpenPositions: num(3),

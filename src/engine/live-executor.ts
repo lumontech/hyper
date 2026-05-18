@@ -71,23 +71,41 @@ export class LiveExecutor {
 
   /**
    * Pipeline completa: signal → size sizing → risk check → mark price → SL/TP → place → log.
+   * @param override Se la combo (coin, strategy) è whitelisted dal walk-forward, contiene gli sl/tp ottimizzati.
+   *                 Il `tier` modula il risk: hard/soft-robust = 100%, exploratory = 50%.
    */
-  async execute(signal: Signal, coin: string, atrValue: number, markPrice: number): Promise<{ ok: boolean; reason?: string; orderId?: string }> {
+  async execute(signal: Signal, coin: string, atrValue: number, markPrice: number, override?: { slMul: number; tpMul: number; tier?: 'hard-robust' | 'soft-robust' | 'exploratory' }): Promise<{ ok: boolean; reason?: string; orderId?: string }> {
     const cfg = this.deps.config
     const account = this.deps.account.current() ?? this.deps.account.placeholder(1000)
 
     // 1. Position sizing — in dry-run usa equity demo (compounding), altrimenti account reale
     const equity = cfg.dryRun ? this.deps.risk.effectiveEquity() : account.equityUsd
-    const riskUsd = equity * (cfg.riskPerTradePct / 100)
-    const slDistAbs = atrValue * cfg.slAtrMult
+    // Tier-based risk multiplier: exploratory sizing dimezzato per controllare rumore
+    const tierMul = override?.tier === 'exploratory' ? 0.5 : 1.0
+    const riskUsd = equity * (cfg.riskPerTradePct / 100) * tierMul
+    // Override SL/TP multipliers se la combo è walk-forward-optimized per questo coin
+    const slMul = override?.slMul ?? cfg.slAtrMult
+    const tpMul = override?.tpMul ?? cfg.tpAtrMult
+    const slDistAbs = atrValue * slMul
     if (slDistAbs <= 0) return { ok: false, reason: 'ATR zero' }
     // size base units: tale che SL distance corrisponda a riskUsd
-    const sizeBase = riskUsd / slDistAbs
-    const notional = sizeBase * markPrice
+    let sizeBase = riskUsd / slDistAbs
+    let notional = sizeBase * markPrice
+
+    // 1b. Position cap-and-resize: invece di rifiutare un trade che eccede maxPositionUsd,
+    // riduciamo la size proporzionalmente. Il rischio reale scenderà sotto il target, ma
+    // il segnale viene comunque eseguito. Su asset volatili (BNB, SOL) con ATR stretto
+    // questo evita di lasciare i signal "morti" per cap notionale.
+    if (notional > cfg.maxPositionUsd) {
+      const scale = cfg.maxPositionUsd / notional
+      sizeBase *= scale
+      notional = cfg.maxPositionUsd
+      this.deps.logger.info({ coin, strategy: signal.strategyId, scale: scale.toFixed(3), scaledRiskUsd: (riskUsd * scale).toFixed(2) }, '[EXEC] position scaled to cap')
+    }
 
     // 2. Determina SL/TP a prezzi assoluti
     const sl = signal.direction === 'long' ? markPrice - slDistAbs : markPrice + slDistAbs
-    const tp = signal.direction === 'long' ? markPrice + atrValue * cfg.tpAtrMult : markPrice - atrValue * cfg.tpAtrMult
+    const tp = signal.direction === 'long' ? markPrice + atrValue * tpMul : markPrice - atrValue * tpMul
 
     // 3. Build order request
     const orderId = `${signal.strategyId ?? 'unknown'}-${coin}-${Date.now()}`
